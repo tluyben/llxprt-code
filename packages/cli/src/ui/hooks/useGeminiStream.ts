@@ -595,6 +595,39 @@ export const useGeminiStream = (
       )
         return;
 
+      // Execute UserPromptSubmit hooks
+      const hookConfig = config.getHooks();
+      if (hookConfig && hookConfig.events?.includes('user-prompt-submit')) {
+        const hookExecutor = config.getToolRegistry().then(registry => registry.getHookExecutor());
+        const executor = await hookExecutor;
+        
+        if (executor) {
+          // Convert query to string for hooks
+          const queryText = Array.isArray(query) 
+            ? query.map(part => typeof part === 'string' ? part : part.text || '').join('')
+            : typeof query === 'string' ? query : query.text || '';
+          
+          // Execute hooks
+          const hookResult = await executor.executeHook({
+            type: 'user-prompt-submit',
+            data: {
+              prompt: queryText,
+              session_id: config.getSessionId(),
+              transcript_path: config.getTranscriptPath() || ''
+            }
+          });
+          
+          // Check if hooks blocked the prompt
+          if (hookResult.blocked) {
+            addItem({
+              type: MessageType.ERROR,
+              text: hookResult.message || 'Prompt blocked by hook'
+            }, Date.now());
+            return;
+          }
+        }
+      }
+
       const userMessageTimestamp = Date.now();
       setShowHelp(false);
 

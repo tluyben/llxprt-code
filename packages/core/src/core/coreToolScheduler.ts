@@ -656,9 +656,17 @@ export class CoreToolScheduler {
               }
             : undefined;
 
-        scheduledCall.tool
-          .execute(scheduledCall.request.args, signal, liveOutputCallback)
-          .then(async (toolResult: ToolResult) => {
+        // Use executeToolWithHooks from the registry
+        this.toolRegistry.then(registry => 
+          registry.executeToolWithHooks(
+            scheduledCall.tool.name,
+            scheduledCall.request.args,
+            this.config.getSessionId(),
+            this.config.getTranscriptPath(),
+            signal,
+            liveOutputCallback
+          )
+        ).then(async (toolResult: ToolResult) => {
             if (signal.aborted) {
               this.setStatusInternal(
                 callId,

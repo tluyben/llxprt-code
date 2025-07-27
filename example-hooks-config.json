@@ -1,0 +1,67 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'User prompt submitted at: $(date)' >> ~/.llxprt/prompt-audit.log"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'About to execute Bash command. Use with caution!'",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "(Edit|Write|MultiEdit)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git status --porcelain | wc -l > /tmp/files-before-edit",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "(Edit|Write|MultiEdit)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'File(s) modified. Running auto-formatter...' && npm run lint --if-present",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Bash command completed at: $(date)' >> ~/.llxprt/bash-audit.log"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Session completed at: $(date)' >> ~/.llxprt/session.log"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -11,6 +11,9 @@ import {
   ToolRegistry,
   shutdownTelemetry,
   isTelemetrySdkInitialized,
+  HookExecutor,
+  HOOK_EVENTS,
+  UserPromptSubmitEventData,
 } from '@vybestack/llxprt-code-core';
 import { Content, Part, FunctionCall, PartListUnion } from '@google/genai';
 
@@ -29,6 +32,41 @@ export async function runNonInteractive(
       process.exit(0);
     }
   });
+
+  // Execute UserPromptSubmit hooks if configured
+  const hooks = config.getHooks();
+  if (hooks) {
+    const hookExecutor = new HookExecutor(hooks);
+    const eventData: UserPromptSubmitEventData = {
+      hook_event_name: HOOK_EVENTS.USER_PROMPT_SUBMIT,
+      session_id: config.getSessionId(),
+      transcript_path: config.getTranscriptPath(),
+      cwd: process.cwd(),
+      user_prompt: input,
+    };
+
+    try {
+      const hookResults = await hookExecutor.executeHooks(
+        HOOK_EVENTS.USER_PROMPT_SUBMIT,
+        eventData,
+        hooks
+      );
+
+      // Check if hooks block the prompt
+      if (hookResults.shouldBlock) {
+        console.error(`User prompt blocked by hook: ${hookResults.blockReason}`);
+        process.exit(1);
+      }
+
+      // Log any context provided by hooks
+      if (hookResults.context) {
+        console.log(`Hook context: ${hookResults.context}`);
+      }
+    } catch (hookError) {
+      console.warn(`UserPromptSubmit hook execution failed: ${hookError}`);
+      // Continue with execution even if hooks fail
+    }
+  }
 
   const geminiClient = config.getGeminiClient();
   const toolRegistry: ToolRegistry = await config.getToolRegistry();

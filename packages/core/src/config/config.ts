@@ -32,6 +32,8 @@ import { GeminiClient } from '../core/client.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { GitService } from '../services/gitService.js';
 import { loadServerHierarchicalMemory } from '../utils/memoryDiscovery.js';
+import type { HookConfig } from '../hooks/hook-types.js';
+import { HookExecutor } from '../hooks/hook-executor.js';
 import { getProjectTempDir } from '../utils/paths.js';
 import {
   // TELEMETRY REMOVED: Disabled imports for telemetry
@@ -165,6 +167,7 @@ export interface ConfigParameters {
   noBrowser?: boolean;
   summarizeToolOutput?: Record<string, SummarizeToolOutputSettings>;
   ideMode?: boolean;
+  hooks?: HookConfig;
 }
 
 export class Config {
@@ -231,6 +234,7 @@ export class Config {
     | Record<string, SummarizeToolOutputSettings>
     | undefined;
   private readonly experimentalAcp: boolean = false;
+  private readonly hooks: HookConfig | undefined;
 
   constructor(params: ConfigParameters) {
     this.sessionId = params.sessionId;
@@ -284,6 +288,7 @@ export class Config {
     this.noBrowser = params.noBrowser ?? false;
     this.summarizeToolOutput = params.summarizeToolOutput;
     this.ideMode = params.ideMode ?? false;
+    this.hooks = params.hooks;
 
     if (params.contextFileName) {
       setLlxprtMdFilename(params.contextFileName);
@@ -612,8 +617,19 @@ export class Config {
     return { memoryContent, fileCount };
   }
 
+  getHooks(): HookConfig | undefined {
+    return this.hooks;
+  }
+
+  getTranscriptPath(): string {
+    // Return the transcript path based on session ID
+    const transcriptDir = path.join(this.getProjectTempDir(), 'transcripts');
+    return path.join(transcriptDir, `${this.sessionId}.txt`);
+  }
+
   async createToolRegistry(): Promise<ToolRegistry> {
-    const registry = new ToolRegistry(this);
+    const hookExecutor = this.hooks ? new HookExecutor() : undefined;
+    const registry = new ToolRegistry(this, hookExecutor, this.hooks);
 
     // helper to create & register core tools that are enabled
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -15,7 +15,7 @@ import { Config } from '../config/config.js';
 import { convertToFunctionResponse } from './coreToolScheduler.js';
 
 /**
- * Executes a single tool call non-interactively.
+ * Executes a single tool call non-interactively with hook support.
  * It does not handle confirmations, multiple calls, or live updates.
  */
 export async function executeToolCall(
@@ -58,13 +58,37 @@ export async function executeToolCall(
   }
 
   try {
-    // Directly execute without confirmation or live output handling
-    const effectiveAbortSignal = abortSignal ?? new AbortController().signal;
-    const toolResult: ToolResult = await tool.execute(
-      toolCallRequest.args,
-      effectiveAbortSignal,
-      // No live output callback for non-interactive mode
-    );
+    // Use hook-aware tool execution if available, otherwise fallback to direct execution
+    let toolResult: ToolResult;
+    if (typeof toolRegistry.executeToolWithHooks === 'function') {
+      // Try hook-aware execution with session context
+      try {
+        toolResult = await toolRegistry.executeToolWithHooks(
+          toolCallRequest.name,
+          toolCallRequest.args,
+          config.getSessionId(),
+          // Use a default transcript path for non-interactive mode
+          process.env.LLXPRT_TRANSCRIPT_PATH || '/tmp/gemini-cli-transcript.json'
+        );
+      } catch (hookError) {
+        // If hooks fail, fall back to direct execution
+        console.warn(`Hook execution failed, falling back to direct execution: ${hookError}`);
+        const effectiveAbortSignal = abortSignal ?? new AbortController().signal;
+        toolResult = await tool.execute(
+          toolCallRequest.args,
+          effectiveAbortSignal,
+          // No live output callback for non-interactive mode
+        );
+      }
+    } else {
+      // Direct execution without hooks
+      const effectiveAbortSignal = abortSignal ?? new AbortController().signal;
+      toolResult = await tool.execute(
+        toolCallRequest.args,
+        effectiveAbortSignal,
+        // No live output callback for non-interactive mode
+      );
+    }
 
     const tool_output = toolResult.llmContent;
 

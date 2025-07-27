@@ -16,6 +16,7 @@ import {
   TelemetrySettings,
   AuthType,
 } from '@vybestack/llxprt-code-core';
+import { HookConfig } from '@vybestack/llxprt-code-core';
 import stripJsonComments from 'strip-json-comments';
 import { DefaultLight } from '../ui/themes/default-light.js';
 import { DefaultDark } from '../ui/themes/default.js';
@@ -111,6 +112,9 @@ export interface Settings {
 
   // Default model to use when no model is specified
   defaultModel?: string;
+
+  // Hook configuration
+  hooks?: HookConfig;
 }
 
 export interface SettingsError {

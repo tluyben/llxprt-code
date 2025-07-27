@@ -12,6 +12,14 @@ import { StringDecoder } from 'node:string_decoder';
 import { discoverMcpTools } from './mcp-client.js';
 import { DiscoveredMCPTool } from './mcp-tool.js';
 import { parse } from 'shell-quote';
+import { HookExecutor } from '../hooks/hook-executor.js';
+import { 
+  HOOK_EVENTS, 
+  HookEventData, 
+  PreToolUseEventData, 
+  PostToolUseEventData,
+  HookConfig
+} from '../hooks/hook-types.js';
 
 type ToolParams = Record<string, unknown>;
 
@@ -127,9 +135,13 @@ Signal: Signal number or \`(none)\` if no signal was received.
 export class ToolRegistry {
   private tools: Map<string, Tool> = new Map();
   private config: Config;
+  private hookExecutor?: HookExecutor;
+  private hookConfig?: HookConfig;
 
-  constructor(config: Config) {
+  constructor(config: Config, hookExecutor?: HookExecutor, hookConfig?: HookConfig) {
     this.config = config;
+    this.hookExecutor = hookExecutor;
+    this.hookConfig = hookConfig;
   }
 
   /**
@@ -336,6 +348,92 @@ export class ToolRegistry {
    */
   getTool(name: string): Tool | undefined {
     return this.tools.get(name);
+  }
+
+  /**
+   * Execute a tool with Claude Code-style hook support.
+   * @param name Tool name to execute
+   * @param params Tool parameters
+   * @param sessionId Session ID for hook context
+   * @param transcriptPath Path to conversation transcript
+   * @param abortSignal Optional abort signal for cancellation
+   * @param updateOutput Optional callback for live output updates
+   * @returns Tool execution result
+   */
+  async executeToolWithHooks(
+    name: string, 
+    params: Record<string, unknown>,
+    sessionId: string,
+    transcriptPath: string,
+    abortSignal?: AbortSignal,
+    updateOutput?: (output: string) => void
+  ): Promise<ToolResult> {
+    const tool = this.getTool(name);
+    if (!tool) {
+      throw new Error(`Tool ${name} not found`);
+    }
+
+    if (!this.hookExecutor || !this.hookConfig) {
+      const effectiveAbortSignal = abortSignal ?? new AbortController().signal;
+      return tool.execute(params as any, effectiveAbortSignal, updateOutput);
+    }
+
+    const baseEventData = {
+      session_id: sessionId,
+      transcript_path: transcriptPath,
+      cwd: process.cwd(),
+    };
+
+    // Execute PreToolUse hooks
+    const preToolUseData: PreToolUseEventData = {
+      ...baseEventData,
+      hook_event_name: HOOK_EVENTS.PRE_TOOL_USE,
+      tool_name: name,
+      tool_input: params,
+    };
+
+    const preHookResults = await this.hookExecutor.executeHooks(
+      HOOK_EVENTS.PRE_TOOL_USE,
+      preToolUseData,
+      this.hookConfig,
+      name
+    );
+
+    // Check if PreToolUse hooks block execution
+    if (preHookResults.shouldBlock) {
+      throw new Error(`Tool execution blocked by hook: ${preHookResults.blockReason}`);
+    }
+
+    try {
+      // Execute the tool
+      const effectiveAbortSignal = abortSignal ?? new AbortController().signal;
+      const result = await tool.execute(params as any, effectiveAbortSignal, updateOutput);
+
+      // Execute PostToolUse hooks
+      const postToolUseData: PostToolUseEventData = {
+        ...baseEventData,
+        hook_event_name: HOOK_EVENTS.POST_TOOL_USE,
+        tool_name: name,
+        tool_input: params,
+        tool_response: result as unknown as Record<string, unknown>,
+      };
+
+      const postHookResults = await this.hookExecutor.executeHooks(
+        HOOK_EVENTS.POST_TOOL_USE,
+        postToolUseData,
+        this.hookConfig,
+        name
+      );
+
+      // PostToolUse hooks can provide feedback but don't typically block
+      if (postHookResults.shouldBlock) {
+        console.warn(`PostToolUse hook warning: ${postHookResults.blockReason}`);
+      }
+
+      return result;
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

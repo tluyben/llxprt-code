@@ -14,6 +14,8 @@ export interface SessionState {
   modelSwitchedFromQuotaError: boolean;
   userTier: UserTierId | undefined;
   transientWarnings: string[];
+  isExecutionStopped: boolean;
+  activeSubagents: string[];
 }
 
 // Action types
@@ -24,7 +26,10 @@ export type SessionAction =
   | { type: 'SET_MODEL_SWITCHED_FROM_QUOTA_ERROR'; payload: boolean }
   | { type: 'SET_USER_TIER'; payload: UserTierId | undefined }
   | { type: 'SET_TRANSIENT_WARNINGS'; payload: string[] }
-  | { type: 'CLEAR_TRANSIENT_WARNINGS' };
+  | { type: 'CLEAR_TRANSIENT_WARNINGS' }
+  | { type: 'SET_EXECUTION_STOPPED'; payload: boolean }
+  | { type: 'ADD_SUBAGENT'; payload: string }
+  | { type: 'REMOVE_SUBAGENT'; payload: string };
 
 // Session reducer with exhaustive switch
 export const sessionReducer = (
@@ -46,6 +51,18 @@ export const sessionReducer = (
       return { ...state, transientWarnings: action.payload };
     case 'CLEAR_TRANSIENT_WARNINGS':
       return { ...state, transientWarnings: [] };
+    case 'SET_EXECUTION_STOPPED':
+      return { ...state, isExecutionStopped: action.payload };
+    case 'ADD_SUBAGENT':
+      return { 
+        ...state, 
+        activeSubagents: [...state.activeSubagents, action.payload] 
+      };
+    case 'REMOVE_SUBAGENT':
+      return {
+        ...state,
+        activeSubagents: state.activeSubagents.filter(id => id !== action.payload)
+      };
     default: {
       // Exhaustive check - this ensures all action types are handled
       const _exhaustiveCheck: never = action;

@@ -464,6 +464,7 @@ export async function loadCliConfig(
     noBrowser: !!process.env.NO_BROWSER,
     summarizeToolOutput: settings.summarizeToolOutput,
     ideMode,
+    hooks: settings.hooks,
   });
 
   // Enhance the config with provider support

@@ -84,6 +84,11 @@ export interface SessionContextType {
   // Helper functions
   checkPaymentModeChange: (forcePreviousProvider?: string) => void;
   performMemoryRefresh: () => Promise<void>;
+  
+  // Hook functionality
+  submitPrompt: (prompt: string) => Promise<boolean>;
+  stopExecution: () => Promise<boolean>;
+  stopSubagent: (subagentId: string) => Promise<boolean>;
 }
 
 // Create context
@@ -121,6 +126,8 @@ export const SessionController: React.FC<SessionControllerProps> = ({
     modelSwitchedFromQuotaError: false,
     userTier: undefined,
     transientWarnings: [],
+    isExecutionStopped: false,
+    activeSubagents: [],
   };
 
   return (
@@ -410,6 +417,71 @@ const SessionControllerInner: React.FC<SessionControllerProps> = ({
     }
   }, [appState.lastAddItemAction, addItem]);
 
+  // Hook functionality
+  const submitPrompt = useCallback(
+    async (prompt: string) => {
+      try {
+        // Add the user's prompt to the history
+        addItem(
+          {
+            type: MessageType.USER,
+            text: prompt,
+          },
+          Date.now(),
+        );
+        return true;
+      } catch (error) {
+        console.error('Error submitting prompt:', error);
+        return false;
+      }
+    },
+    [addItem],
+  );
+
+  const stopExecution = useCallback(
+    async () => {
+      try {
+        // Mark execution as stopped in state
+        dispatch({ type: 'SET_EXECUTION_STOPPED', payload: true });
+        
+        addItem(
+          {
+            type: MessageType.SYSTEM,
+            text: 'Execution stopped by user',
+          },
+          Date.now(),
+        );
+        return true;
+      } catch (error) {
+        console.error('Error stopping execution:', error);
+        return false;
+      }
+    },
+    [addItem, dispatch],
+  );
+
+  const stopSubagent = useCallback(
+    async (subagentId: string) => {
+      try {
+        // Remove subagent from active list
+        dispatch({ type: 'REMOVE_SUBAGENT', payload: subagentId });
+        
+        addItem(
+          {
+            type: MessageType.SYSTEM,
+            text: `Subagent ${subagentId} stopped by user`,
+          },
+          Date.now(),
+        );
+        return true;
+      } catch (error) {
+        console.error('Error stopping subagent:', error);
+        return false;
+      }
+    },
+    [addItem, dispatch],
+  );
+
   const contextValue = useMemo(
     () => ({
       history,
@@ -423,6 +495,9 @@ const SessionControllerInner: React.FC<SessionControllerProps> = ({
       appDispatch,
       checkPaymentModeChange,
       performMemoryRefresh,
+      submitPrompt,
+      stopExecution,
+      stopSubagent,
     }),
     [
       history,
@@ -436,6 +511,9 @@ const SessionControllerInner: React.FC<SessionControllerProps> = ({
       appDispatch,
       checkPaymentModeChange,
       performMemoryRefresh,
+      submitPrompt,
+      stopExecution,
+      stopSubagent,
     ],
   );
 

@@ -45,6 +45,11 @@ export * from './services/ideContext.js';
 export * from './tools/tools.js';
 export * from './tools/tool-registry.js';
 
+// Export hooks system
+export * from './hooks/hook-types.js';
+export * from './hooks/hook-executor.js';
+export * from './hooks/hook-utils.js';
+
 // Export specific tool logic
 export * from './tools/read-file.js';
 export * from './tools/ls.js';
